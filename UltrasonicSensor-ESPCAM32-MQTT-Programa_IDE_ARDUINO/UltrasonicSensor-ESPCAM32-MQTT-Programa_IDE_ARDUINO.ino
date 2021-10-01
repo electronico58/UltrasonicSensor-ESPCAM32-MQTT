@@ -26,6 +26,7 @@
 //Bibliotecas
 #include <WiFi.h>  // Biblioteca para el control de WiFi
 #include <PubSubClient.h> //Biblioteca para conexion MQTT
+#include <Ultrasonic.h> // Biblioteca del sensor Ultrasonic
 
 //Datos de WiFi
 const char* ssid = "INFINITUMBF13_2.4";  // Aquí debes poner el nombre de tu red
@@ -39,16 +40,26 @@ const char* password = "0007213411";  // Aquí debes poner la contraseña de tu 
 const char* mqtt_server = "18.196.86.233"; // Si estas en una red local, coloca la IP asignada, en caso contrario, coloca la IP publica
 IPAddress server(18,196,86,233);
 
-// Objetos
-WiFiClient espClient; // Este objeto maneja los datos de conexion WiFi
-PubSubClient client(espClient); // Este objeto maneja los datos de conexion al broker
-
+/************************************************
+ *  Declaracion de Variables
+ *  ********************************************/
 // Variables
 int flashLedPin = 4;  // Para indicar el estatus de conexión
 int statusLedPin = 33; // Para ser controlado por MQTT
 long timeNow, timeLast; // Variables de control de tiempo no bloqueante
-int data = 0; // Contador
+int distance = 0; // Distancia del sensor ultrasonico
 int wait = 5000;  // Indica la espera cada 5 segundos para envío de mensajes MQTT
+int pinTrigger = 15; // GPIO15 <- Trigger del UltrasonicSensor
+int pinEcho = 14; // GPIO14 <- Echo del UltrasonicSensor
+int distance;
+
+/************************************************
+ *  Declaracion de Objetos
+ *  ********************************************/
+// Objetos
+WiFiClient espClient; // Este objeto maneja los datos de conexion WiFi
+PubSubClient client(espClient); // Este objeto maneja los datos de conexion al broker
+Ultrasonic ultrasonic(pinTrigger, pinEcho); // ESPCAM32 -> GPIO(15,14) -> (Trig, Echo)
 
 // Inicialización del programa
 void setup() {
@@ -107,9 +118,13 @@ void loop() {
   if (timeNow - timeLast > wait) { // Manda un mensaje por MQTT cada cinco segundos
     timeLast = timeNow; // Actualización de seguimiento de tiempo
 
-    data++; // Incremento a la variable para ser enviado por MQTT
+    /*********************************
+     * LECTURA DEL SENSOR ULTRASONIC
+     * ******************************/
+    distance = ultrasonic.read(); // Lectura del sensor
+    
     char dataString[8]; // Define una arreglo de caracteres para enviarlos por MQTT, especifica la longitud del mensaje en 8 caracteres
-    dtostrf(data, 1, 2, dataString);  // Esta es una función nativa de leguaje AVR que convierte un arreglo de caracteres en una variable String
+    dtostrf(distance, 1, 2, dataString);  // Esta es una función nativa de leguaje AVR que convierte un arreglo de caracteres en una variable String
     Serial.print("Contador: "); // Se imprime en monitor solo para poder visualizar que el evento sucede
     Serial.println(dataString);
     client.publish("esp32/data", dataString); // Esta es la función que envía los datos por MQTT, especifica el tema y el valor
