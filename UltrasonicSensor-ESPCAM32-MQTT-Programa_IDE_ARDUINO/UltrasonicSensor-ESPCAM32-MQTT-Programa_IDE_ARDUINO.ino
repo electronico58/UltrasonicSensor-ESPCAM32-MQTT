@@ -1,7 +1,7 @@
 /*
  * **************************************************
- * LECTOR DEL SENSOR ULTRASONICO CON EL ESP32CAMCON
- * LA BIBLIOTEC AULTRASONIC DE ERIK SIMOES EN SU VERSION
+ * LECTOR DEL SENSOR ULTRASONICO CON EL ESP32CAM CON
+ * LA BIBLIOTEC ULTRASONIC DE ERIK SIMOES EN SU VERSION
  * 3.0.0. SE MEZCLA CON EL PROGRAMA ESP32CAM-MQTT BASIC 
  * DEL REPOSITORIO DE CODIGO IoT
  * ****************************************************
@@ -40,9 +40,9 @@ const char* password = "0007213411";  // Aquí debes poner la contraseña de tu 
 const char* mqtt_server = "18.196.86.233"; // Si estas en una red local, coloca la IP asignada, en caso contrario, coloca la IP publica
 IPAddress server(18,196,86,233);
 
-/************************************************
- *  Declaracion de Variables
- *  ********************************************/
+/*****************************
+ *  Declaracion de Variables *
+ *****************************/
 // Variables
 int flashLedPin = 4;  // Para indicar el estatus de conexión
 int statusLedPin = 33; // Para ser controlado por MQTT
@@ -53,9 +53,9 @@ int pinTrigger = 15; // GPIO15 <- Trigger del UltrasonicSensor
 int pinEcho = 14; // GPIO14 <- Echo del UltrasonicSensor
 int distance;
 
-/************************************************
- *  Declaracion de Objetos
- *  ********************************************/
+/***************************
+ *  Declaracion de Objetos *
+ ***************************/
 // Objetos
 WiFiClient espClient; // Este objeto maneja los datos de conexion WiFi
 PubSubClient client(espClient); // Este objeto maneja los datos de conexion al broker
