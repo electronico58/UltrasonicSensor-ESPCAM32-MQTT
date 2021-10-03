@@ -119,8 +119,8 @@ void loop() {
     timeLast = timeNow; // Actualización de seguimiento de tiempo
 
     /*********************************
-     * LECTURA DEL SENSOR ULTRASONIC
-     * ******************************/
+     * LECTURA DEL SENSOR ULTRASONIC *
+     * *******************************/
     distance = ultrasonic.read(); // Lectura del sensor
     
     char dataString[8]; // Define una arreglo de caracteres para enviarlos por MQTT, especifica la longitud del mensaje en 8 caracteres
