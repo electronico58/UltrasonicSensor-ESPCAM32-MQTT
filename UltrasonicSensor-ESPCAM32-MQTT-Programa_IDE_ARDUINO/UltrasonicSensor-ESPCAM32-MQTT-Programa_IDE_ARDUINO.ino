@@ -34,11 +34,11 @@ const char* password = "0007213411";  // Aquí debes poner la contraseña de tu 
 
 //Datos del broker MQTT
 /* --- PARA PROBAR EN RED LOCAL con BROKER local --- */
-//const char* mqtt_server = "127.0.0.1"; // Si estas en una red local, coloca la IP asignada, en caso contrario, coloca la IP publica
+//const char* mqtt_server = "18.194.65.151"; // Si estas en una red local, coloca la IP asignada, en caso contrario, coloca la IP publica
 //IPAddress server(127,0,0,1);
 /* --- PARA PROBAR con BROKER remoto --- */
-const char* mqtt_server = "18.196.86.233"; // Si estas en una red local, coloca la IP asignada, en caso contrario, coloca la IP publica
-IPAddress server(18,196,86,233);
+const char* mqtt_server = "18.194.65.151"; // Si estas en una red local, coloca la IP asignada, en caso contrario, coloca la IP publica
+IPAddress server(18,194,65,151);
 
 /*****************************
  *  Declaracion de Variables *
@@ -51,7 +51,7 @@ int distance = 0; // Distancia del sensor ultrasonico
 int wait = 5000;  // Indica la espera cada 5 segundos para envío de mensajes MQTT
 int pinTrigger = 15; // GPIO15 <- Trigger del UltrasonicSensor
 int pinEcho = 14; // GPIO14 <- Echo del UltrasonicSensor
-int distance;
+int Distancia;
 
 /***************************
  *  Declaracion de Objetos *
@@ -121,13 +121,14 @@ void loop() {
     /*********************************
      * LECTURA DEL SENSOR ULTRASONIC *
      * *******************************/
-    distance = ultrasonic.read(); // Lectura del sensor
+    Distancia = ultrasonic.read(); // Lectura del sensor
     
     char dataString[8]; // Define una arreglo de caracteres para enviarlos por MQTT, especifica la longitud del mensaje en 8 caracteres
-    dtostrf(distance, 1, 2, dataString);  // Esta es una función nativa de leguaje AVR que convierte un arreglo de caracteres en una variable String
-    Serial.print("Contador: "); // Se imprime en monitor solo para poder visualizar que el evento sucede
+    dtostrf(Distancia, 1, 2, dataString);  // Esta es una función nativa de leguaje AVR que convierte un arreglo de caracteres en una variable String
+    //Serial.print("Distancia: "); // Se imprime en monitor solo para poder visualizar que el evento sucede
+    Serial.print("D: "); // Se imprime en monitor solo para poder visualizar que el evento sucede
     Serial.println(dataString);
-    client.publish("esp32/data", dataString); // Esta es la función que envía los datos por MQTT, especifica el tema y el valor
+    client.publish("codigoiot/dis/fr", dataString); // Esta es la función que envía los datos por MQTT, especifica el tema y el valor
   }// fin del if (timeNow - timeLast > wait)
 }// fin del void loop ()
 
@@ -156,34 +157,37 @@ void callback(char* topic, byte* message, unsigned int length) {
 
   // Ejemplo, en caso de recibir el mensaje true - false, se cambiará el estado del led soldado en la placa.
   // El ESP323CAM está suscrito al tema esp/output
-  if (String(topic) == "esp32/output") {  // En caso de recibirse mensaje en el tema esp32/output
+  if (String(topic) == "codigoiot/respuesta/fernandoramirez") {  // En caso de recibirse mensaje en el tema codigoiot/respuesta/fernandoramirez
     if(messageTemp == "true"){
       Serial.println("Led encendido");
       digitalWrite(flashLedPin, HIGH);
-    }// fin del if (String(topic) == "esp32/output")
+    }// fin del if (String(topic) == "codigoiot/respuesta/fernandoramirez")
     else if(messageTemp == "false"){
       Serial.println("Led apagado");
       digitalWrite(flashLedPin, LOW);
     }// fin del else if(messageTemp == "false")
-  }// fin del if (String(topic) == "esp32/output")
+  }// fin del if (String(topic) == "codigoiot/respuesta/fernandoramirez")
 }// fin del void callback
 
 // Función para reconectarse
 void reconnect() {
   // Bucle hasta lograr conexión
   while (!client.connected()) { // Pregunta si hay conexión
-    Serial.print("Tratando de contectarse...");
+    Serial.print("-"); // - = Tratando de conectarse...
     // Intentar reconexión
     if (client.connect("ESP32CAMClient")) { //Pregunta por el resultado del intento de conexión
-      Serial.println("Conectado");
-      client.subscribe("esp32/output"); // Esta función realiza la suscripción al tema
+      Serial.println("+"); // Serial.println("Conectado");
+      client.subscribe("codigoiot/respuesta/fernandoramirez"); // Esta función realiza la suscripción al tema
     }// fin del  if (client.connect("ESP32CAMClient"))
     else {  //en caso de que la conexión no se logre
-      Serial.print("Conexion fallida, Error rc=");
+      //Serial.print("Conexion fallida, Error rc=");
+      //Serial.print(client.state()); // Muestra el codigo de error
+      //Serial.println(" Volviendo a intentar en 5 segundos");
+      Serial.print("Err="); // Conexion fallida, Error rc="
       Serial.print(client.state()); // Muestra el codigo de error
-      Serial.println(" Volviendo a intentar en 5 segundos");
+      Serial.println("_"); // _ =  Volviendo a intentar en 5 segundos
       // Espera de 5 segundos bloqueante
-      delay(5000);
+      delay(500); // delay(5000);
       Serial.println (client.connected ()); // Muestra estatus de conexión
     }// fin del else
   }// fin del bucle while (!client.connected())
