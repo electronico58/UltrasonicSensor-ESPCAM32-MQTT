@@ -1,70 +1,122 @@
-/*
- * **************************************************
- * LECTOR DEL SENSOR ULTRASONICO CON EL ESP32CAM CON
- * LA BIBLIOTEC ULTRASONIC DE ERIK SIMOES EN SU VERSION
- * 3.0.0. SE MEZCLA CON EL PROGRAMA ESP32CAM-MQTT BASIC 
- * DEL REPOSITORIO DE CODIGO IoT
- * ****************************************************
- * Conexión básica por MQTT del NodeMCU
- * por: Hugo Escalpelo
- * Fecha: 28 de julio de 2021
+/* ********************************************************************
  * 
- * Este programa envía datos  por Internet a través del protocolo MQTT. Para poder
- * comprobar el funcionamiento de este programa, es necesario conectarse a un broker
- * y usar NodeRed para visualzar que la información se está recibiendo correctamente.
- * Este programa no requiere componentes adicionales.
+ *      PROGRAMA PARA MANEJAR EL SENSOR ULTRASONICO "HC-SR04"
+ *                CON LA TARJETA "ESP32-CAM"
  * 
- * Componente     PinESP32CAM     Estados lógicos
- * ledStatus------GPIO 33---------On=>LOW, Off=>HIGH
- * ledFlash-------GPIO 4----------On=>HIGH, Off=>LOW
- * HC-SR04-VCC-------VCC -FTDI
- * HC-SR04-GND-------GND-FTDI
- * HC-SR04-Trig-------GPIO15
- * HC-SR04--Echo------GPIO14
- */
+ * ********************************************************************
+ *       Diplomado IoT                     octubre - 2021
+ * ********************************************************************
+ * 
+ * Descripción:
+ * 1. Este programa es una mezcla de un ejemplo contenido
+ *    en la biblioteca "Ultrasonic" de "Eric Simoes"
+ *    y el programa "Conexión básica por MQTT del NodeMCU"
+ *    realizado por Hugo Escalpelo (28-julio-2021), que se
+ *    encuentra en el REPOSITORIO (GitHub) de Codigo IoT
+ * 
+ * 2. Este programa envía datos  por Internet a través del 
+ *    protocolo MQTT. 
+ *    Para poder comprobar el funcionamiento de este programa, 
+ *    es necesario conectarse a un broker y usar NodeRed para 
+ *    visualzar que la información se está recibiendo correctamente.
+ *    Este programa no requiere componentes adicionales.
+ * 
+ *    Componente      PinESP32CAM       Estados lógicos
+ *    ledStatus--------GPIO 33---------On=>LOW, Off=>HIGH
+ *    ledFlash---------GPIO 4----------On=>HIGH, Off=>LOW
+ *    
+ *    HC-SR04-VCC------VCC-FTDI
+ *    HC-SR04-GND------GND-FTDI
+ *    
+ *    ESPCAM32    ->  HC-SR04
+ *    GPIO(15,14) ->  (Trig, Echo)
+ *    GPIO15----------HC-SR04-Trig
+ *    GPIO14----------HC-SR04-Echo
+ * 
+ * ******************************************************************/
 
-//Bibliotecas
-#include <WiFi.h>  // Biblioteca para el control de WiFi
-#include <PubSubClient.h> //Biblioteca para conexion MQTT
-#include <Ultrasonic.h> // Biblioteca del sensor Ultrasonic
+ /* -----------------------------------------------------------------
+  *  
+  *  ESTRUCTURA DEL PROGRAMA:
+  *  
+  *  100 - void setup()
+  *        110 - void callback()                  <-- RECEPCION msgs
+  *  200 - void loop()
+  *        210 - void verificar_conexion_broker()
+  *             215 - void reconnect()
+  *        220 - void envio_mensajes_mqtt()       <-- ENVIO msgs
+  *        
+  * ---------------------------------------------------------------*/
 
-//Datos de WiFi
-const char* ssid = "INFINITUMBF13_2.4";  // Aquí debes poner el nombre de tu red
-const char* password = "0007213411";  // Aquí debes poner la contraseña de tu red
+/**********************************
+ *          BIBLIOTECAS
+ * *******************************/
+#include <WiFi.h>           // Control de WiFi
+#include <PubSubClient.h>   // Conexion MQTT
+#include <Ultrasonic.h>     // Sensor Ultrasonic
 
-//Datos del broker MQTT
-/* --- PARA PROBAR EN RED LOCAL con BROKER local --- */
-//const char* mqtt_server = "18.194.65.151"; // Si estas en una red local, coloca la IP asignada, en caso contrario, coloca la IP publica
+/**********************************
+ *   DATOS para CONEXION A WiFi
+ * *******************************/
+const char* ssid = "INFINITUMBF13_2.4";  // Nombre de la RED
+const char* password = "0007213411";     // Contraseña
+
+/**********************************
+ *    DATOS del BROKER MQTT
+ * *******************************/
+
+/*---------------------------------------------------*/
+/*     PARA PROBAR EN RED LOCAL con BROKER local     */
+/*          IP asignada ó IP publica                 */
+/*            localhost -> 127.0.0.1                 */
+/*       Equipo LOCAL corrindo "mosquitto"           */
+/*---------------------------------------------------*/
+//const char* mqtt_server = "127.0.0.1"; 
 //IPAddress server(127,0,0,1);
-/* --- PARA PROBAR con BROKER remoto --- */
-const char* mqtt_server = "18.194.65.151"; // Si estas en una red local, coloca la IP asignada, en caso contrario, coloca la IP publica
-IPAddress server(18,194,65,151);
 
-/*****************************
- *  Declaracion de Variables *
- *****************************/
-// Variables
-int flashLedPin = 4;  // Para indicar el estatus de conexión
-int statusLedPin = 33; // Para ser controlado por MQTT
-long timeNow, timeLast; // Variables de control de tiempo no bloqueante
-int distance = 0; // Distancia del sensor ultrasonico
-int wait = 5000;  // Indica la espera cada 5 segundos para envío de mensajes MQTT
-int pinTrigger = 15; // GPIO15 <- Trigger del UltrasonicSensor
-int pinEcho = 14; // GPIO14 <- Echo del UltrasonicSensor
-int Distancia;
+/*---------------------------------------------------*/
+/*           PARA PROBAR con BROKER remoto           */
+/*     IP obtenida con: $ nslookup boker.hivemq.com  */
+/*---------------------------------------------------*/
+const char* mqtt_server = "3.122.36.163"; // IP del 6 oct 2021
+IPAddress server(3,122,36,163);
+//const char* mqtt_server = "127.0.0.1"; // IP del 6 oct 2021
+//IPAddress server(127,0,0,1);
 
-/***************************
- *  Declaracion de Objetos *
- ***************************/
-// Objetos
-WiFiClient espClient; // Este objeto maneja los datos de conexion WiFi
-PubSubClient client(espClient); // Este objeto maneja los datos de conexion al broker
-Ultrasonic ultrasonic(pinTrigger, pinEcho); // ESPCAM32 -> GPIO(15,14) -> (Trig, Echo)
+/**********************************
+ *    Declaracion de VARIABLES
+ * *******************************/
+int flashLedPin = 4;      // Controlado por MQTT
+int statusLedPin = 33;    // Estatus de conexión
+long timeNow, timeLast;   // Variables de control de tiempo no bloqueante
+int Distancia = 0;         // Distancia del sensor ultrasonico
+int wait = 5000;          // Espera cada 5 segundos para envío de mensajes MQTT
+int pinTrigger = 15;      // GPIO15 <- Trigger del UltrasonicSensor
+int pinEcho = 14;         // GPIO14 <- Echo del UltrasonicSensor
 
-// Inicialización del programa
+/* ********************************************************************
+ *                Declaracion de OBJETOS:
+ *    
+ * espClient         <- Objeto para manejo de conexion WiFi
+ * client(espClient) <- Objeto para manejo del BROKER
+ * ultrasonic(args)  <- Objeto para manejo del sesnor Ultrasonic
+ * *******************************************************************/
+WiFiClient espClient; 
+PubSubClient client(espClient); 
+Ultrasonic ultrasonic(pinTrigger, pinEcho); 
+
+/* ********************************************************************
+ *  
+ *                    100 - void setup()
+ *                    
+ * *******************************************************************/
 void setup() {
-  // Iniciar comunicación serial
+
   Serial.begin (115200);
+  
+  /* - 1 ----------------------------------------------------
+   *               Inicializacion de LED's 
+   * ------------------------------------------------------*/
   pinMode (flashLedPin, OUTPUT);
   pinMode (statusLedPin, OUTPUT);
   digitalWrite (flashLedPin, LOW);
@@ -74,121 +126,247 @@ void setup() {
   Serial.println();
   Serial.print("Conectar a ");
   Serial.println(ssid);
- 
-  WiFi.begin(ssid, password); // Esta es la función que realiz la conexión a WiFi
- 
-  while (WiFi.status() != WL_CONNECTED) { // Este bucle espera a que se realice la conexión
+  
+  /* - 2 ----------------------------------------------------
+   *               Iniciar Conexion a WiFi 
+   * ------------------------------------------------------*/                 
+  WiFi.begin(ssid, password); 
+  /* --- Espera a que se establezca la conexion a WiFi --- */
+  while (WiFi.status() != WL_CONNECTED) { 
     digitalWrite (statusLedPin, HIGH);
-    delay(500); //dado que es de suma importancia esperar a la conexión, debe usarse espera bloqueante
+    /* --- dado que es de suma importancia esperar 
+        a la conexión, debe usarse espera bloqueante --- */
+    delay(500); 
     digitalWrite (statusLedPin, LOW);
-    Serial.print(".");  // Indicador de progreso
+    /* --- Indicador de progreso --- */
+    Serial.print(".");  
     delay (5);
   }
   
-  // Cuando se haya logrado la conexión, el programa avanzará, por lo tanto, puede informarse lo siguiente
+  /* - 3 ----------------------------------------------------
+   *             Conexion a WiFi Establecida
+   * ------------------------------------------------------*/
   Serial.println();
   Serial.println("WiFi conectado");
   Serial.println("Direccion IP: ");
   Serial.println(WiFi.localIP());
-
-  // Si se logro la conexión, encender led
+  /* --- Si se logro la conexión, encender statusLED --- */
   if (WiFi.status () > 0){
   digitalWrite (statusLedPin, LOW);
   }
-  
-  delay (1000); // Esta espera es solo una formalidad antes de iniciar la comunicación con el broker
 
-  // Conexión con el broker MQTT
-  client.setServer(server, 1883); // Conectarse a la IP del broker en el puerto indicado
-  client.setCallback(callback); // Activar función de CallBack, permite recibir mensajes MQTT y ejecutar funciones a partir de ellos
-  delay(1500);  // Esta espera es preventiva, espera a la conexión para no perder información
+  /* --- Formalidad antes de iniciar la comunicación con el BROKER --- */
+  delay (1000); 
 
-  timeLast = millis (); // Inicia el control de tiempo
-}// fin del void setup ()
+  /* - 4 ----------------------------------------------------
+   *               Iniciar Conexion al BROKER 
+   *               
+   *     OBJETO:         server
+   *     IP del BROKER:  3,122,36,163
+   *                     IP obtenida con: 
+   *                     $ nslookup boker.hivemq.com
+   *     TIPO de OBJETO: IPAdress
+   *     PUERTO:         1883 -> tcp MQTT protocol
+   *     
+   *     COMANDO:        IPAddress server(3,122,36,163);
+   * ------------------------------------------------------*/
+   /* --- Conectarse a la IP del Broker en el puerto indicado --- */
+  client.setServer(server, 1883); 
+  /* --- Activar función de CallBack, permite recibir mensajes 
+            MQTT y ejecutar funciones a partir de ellos       --- */
+  client.setCallback(callback);
+  /* --- Esta espera es preventiva, espera a la conexión 
+                para no perder información                    --- */
+  delay(1500);  // 
 
-// Cuerpo del programa, bucle principal
+  /* - 5 ----------------------------------------------------
+   *             Inicia el Control de Tiempo
+   * ------------------------------------------------------*/
+  timeLast = millis ();
+}
+
+
+/* ********************************************************************
+ *  
+ *                      200 - void loop()
+ *                      
+ * *******************************************************************/
 void loop() {
-  //Verificar siempre que haya conexión al broker
+
+  /* -------------------------------------------------- *
+   *     Verificar siempre que haya conexión al broker  *
+   * ---------------------------------------------------*/
+  verificar_conexion_broker();
+
+  /* -------------------------------------------------- *
+   *     Envío de mensajes por MQTT cada 5 segundos     *
+   *           (wait = 5000 -> 5 segundos)              *
+   * ---------------------------------------------------*/
+  envio_mensajes_mqtt();
+}
+
+
+/* ********************************************************************
+ *  
+ *               210 - void verificar_conexion_broker()
+ *                      
+ * *******************************************************************/
+void verificar_conexion_broker() {
   if (!client.connected()) {
-    reconnect();  // En caso de que no haya conexión, ejecutar la función de reconexión, definida despues del void setup ()
-  }// fin del if (!client.connected())
-  client.loop(); // Esta función es muy importante, ejecuta de manera no bloqueante las funciones necesarias para la comunicación con el broker
-  
-  timeNow = millis(); // Control de tiempo para esperas no bloqueantes
-  if (timeNow - timeLast > wait) { // Manda un mensaje por MQTT cada cinco segundos
-    timeLast = timeNow; // Actualización de seguimiento de tiempo
+    /* En caso de que no haya conexión,   *
+     * ejecutar la función de reconexión, *
+     * definida despues del void setup () */
+    reconnect();  // 
+  }
 
-    /*********************************
-     * LECTURA DEL SENSOR ULTRASONIC *
-     * *******************************/
-    Distancia = ultrasonic.read(); // Lectura del sensor
-    
-    char dataString[8]; // Define una arreglo de caracteres para enviarlos por MQTT, especifica la longitud del mensaje en 8 caracteres
-    dtostrf(Distancia, 1, 2, dataString);  // Esta es una función nativa de leguaje AVR que convierte un arreglo de caracteres en una variable String
-    //Serial.print("Distancia: "); // Se imprime en monitor solo para poder visualizar que el evento sucede
-    Serial.print("D: "); // Se imprime en monitor solo para poder visualizar que el evento sucede
+  /* --------------------------------------------------------
+   *     Ejecutar de manera no bloqueante las funciones 
+   *     necesarias para la comunicación con el broker 
+   * ------------------------------------------------------*/  
+  client.loop(); 
+}
+
+
+/* ********************************************************************
+ *  
+ *                  220 - void envio_mensajes_mqtt()
+ *                          ENVIO DE MENSAJES MQTT
+ *                      
+ * *******************************************************************/
+ void envio_mensajes_mqtt() {
+  /* --------------------------------------------------------
+   *     Envío de mensajes por MQTT cada 5 segundos 
+   *              (wait = 5000 -> 5 segundos)
+   * ------------------------------------------------------*/
+  timeNow = millis();
+  if (timeNow - timeLast > wait) { 
+    /* --- Se cumplieron los 5 segundos y se actualiza
+        la variable "timeLast" para seguimiento del tiempo --- */
+    timeLast = timeNow;
+
+    /* --- Lectura del SENSOR ULTRASONICO --- */
+    Distancia = ultrasonic.read();
+
+    /* --- Define un arreglo de caracteres para enviarlos 
+            por MQTT. Especifica la longitud del mensaje
+                     en 8 caracteres                      --- */
+    char dataString[8];
+    /* --- Esta es una función nativa de leguaje AVR que 
+             convierte un arreglo de caracteres en una
+                     variable String                      --- */
+    dtostrf(Distancia, 1, 2, dataString);
+    /* --- Se imprime en monitor solo para poder
+             visualizar que el evento sucede              --- */
+    Serial.print("Distancia: ");
     Serial.println(dataString);
-    client.publish("codigoiot/dis/fr", dataString); // Esta es la función que envía los datos por MQTT, especifica el tema y el valor
-  }// fin del if (timeNow - timeLast > wait)
-}// fin del void loop ()
+    /* ---  Esta es la función que envía los datos por MQTT 
+                Especifica el tema y el valor             --- */
+    client.publish("codigoiot/distancia/fernandoramirez", dataString);
+  }
+ }
 
-// Funciones de usuario
 
-// Esta función permite tomar acciones en caso de que se reciba un mensaje correspondiente a un tema al cual se hará una suscripción
+/* ********************************************************************
+ *  
+ *                      110 - void callback 
+ *                    RECEPCION DE MENSAJES MQTT      
+ *                      
+ * *******************************************************************/
+/* -------------------------------------------------------------------
+ *   Esta función permite tomar acciones en caso de que se reciba un 
+ *  mensaje correspondiente a un tema al cual se hará una suscripción
+ * ----------------------------------------------------------------- */
 void callback(char* topic, byte* message, unsigned int length) {
 
-  // Indicar por serial que llegó un mensaje
+  /* --- Indicar por serial que llegó un mensaje --- */
   Serial.print("Llegó un mensaje en el tema: ");
   Serial.print(topic);
 
-  // Concatenar los mensajes recibidos para conformarlos como una varialbe String
-  String messageTemp; // Se declara la variable en la cual se generará el mensaje completo  
+  /* --- Concatenar los mensajes recibidos para 
+          conformarlos como una variable String.
+          Se declara la variable en la cual se
+          guardará el mensaje completo recibido  --- */
+  String messageTemp;
+  /* --- Se imprime y construye el mensaje recibido --- */
   for (int i = 0; i < length; i++) {  // Se imprime y concatena el mensaje
     Serial.print((char)message[i]);
     messageTemp += (char)message[i];
   }
 
-  // Se comprueba que el mensaje se haya concatenado correctamente
+  /* --- Se comprueba que el mensaje se haya concatenado correctamente --- */
   Serial.println();
-  Serial.print ("Mensaje concatenado en una sola variable: ");
+  Serial.print ("Mensaje RECIBIDO concatenado en una sola variable: ");
   Serial.println (messageTemp);
 
-  // En esta parte puedes agregar las funciones que requieras para actuar segun lo necesites al recibir un mensaje MQTT
+  /* --------------------------------------------------------
+   *      En esta parte puedes agregar las funciones que 
+   *   requieras para actuar segun lo necesites al recibir 
+   *                 un mensaje MQTT
+   * ------------------------------------------------------*/
 
-  // Ejemplo, en caso de recibir el mensaje true - false, se cambiará el estado del led soldado en la placa.
-  // El ESP323CAM está suscrito al tema esp/output
-  if (String(topic) == "codigoiot/respuesta/fernandoramirez") {  // En caso de recibirse mensaje en el tema codigoiot/respuesta/fernandoramirez
+  /* --------------------------------------------------------
+   *  Ejemplo: 
+   *    En caso de recibir el mensaje true - false, 
+   *    se cambiará el estado del LED soldado en la placa. 
+   *    int statusLedPin = 33 <- Controlado por MQTT
+   *    
+   *    El ESP323CAM está suscrito al tema:
+   *          "codigoiot/respuesta/fernandoramirez"
+   * ------------------------------------------------------*/
+  /* --- En caso de recibirse mensaje en el tema: 
+              "codigoiot/respuesta/fernandoramirez"
+                 ENCENDER el LED "flashLedPin"         --- */
+  if (String(topic) == "codigoiot/respuesta/fernandoramirez") {
     if(messageTemp == "true"){
       Serial.println("Led encendido");
       digitalWrite(flashLedPin, HIGH);
-    }// fin del if (String(topic) == "codigoiot/respuesta/fernandoramirez")
+    }
+  /* --- En caso de NO recibirse mensaje en el tema: 
+              "codigoiot/respuesta/fernandoramirez"
+                 APAGAR el LED "flashLedPin"          --- */
     else if(messageTemp == "false"){
       Serial.println("Led apagado");
       digitalWrite(flashLedPin, LOW);
-    }// fin del else if(messageTemp == "false")
-  }// fin del if (String(topic) == "codigoiot/respuesta/fernandoramirez")
-}// fin del void callback
+    }
+  }
+}
 
-// Función para reconectarse
+
+/* ********************************************************************
+ *  
+ *                      215 - void reconnect()
+ *                      
+ * *******************************************************************/
 void reconnect() {
-  // Bucle hasta lograr conexión
-  while (!client.connected()) { // Pregunta si hay conexión
-    Serial.print("-"); // - = Tratando de conectarse...
-    // Intentar reconexión
-    if (client.connect("ESP32CAMClient")) { //Pregunta por el resultado del intento de conexión
-      Serial.println("+"); // Serial.println("Conectado");
-      client.subscribe("codigoiot/respuesta/fernandoramirez"); // Esta función realiza la suscripción al tema
-    }// fin del  if (client.connect("ESP32CAMClient"))
-    else {  //en caso de que la conexión no se logre
-      //Serial.print("Conexion fallida, Error rc=");
-      //Serial.print(client.state()); // Muestra el codigo de error
-      //Serial.println(" Volviendo a intentar en 5 segundos");
-      Serial.print("Err="); // Conexion fallida, Error rc="
-      Serial.print(client.state()); // Muestra el codigo de error
-      Serial.println("_"); // _ =  Volviendo a intentar en 5 segundos
-      // Espera de 5 segundos bloqueante
-      delay(500); // delay(5000);
-      Serial.println (client.connected ()); // Muestra estatus de conexión
-    }// fin del else
-  }// fin del bucle while (!client.connected())
-}// fin de void reconnect(
+
+  /* -----------------------------------------------------------------
+   *    Bloque de ESPERA hasta lograr la CONEXION con el BROKER
+   * -----------------------------------------------------------------*/
+  /* --- Espera hasta lograr conexión --- */
+  while (!client.connected()) { 
+    /* --- Mientras no exista CONEXION con el BROKER --- */
+    Serial.print("Tratando de conectarse con el BROKER...");
+
+    /* --- Pregunta por el resultado del intento de conexión --- */
+    if (client.connect("ESP32CAMClient")) { 
+      /* --- Se ESTABLECIO la conexion con el BROKER --- */
+      Serial.println("Conectando con el BROKER...");
+      /* --- El ESP32CAM se SUSCRIBE al tema: "codigoiot/respuesta/fernandoramirez" --- */
+      client.subscribe("codigoiot/respuesta/fernandoramirez"); 
+    }
+    
+    /* --- NO se logró establecer la conexion con el BROKER --- */
+    else {  
+      Serial.print("Conexion fallida con el BROKER, Error rc=");
+      /* --- Se muestra el código de error --- */
+      Serial.print(client.state()); 
+      Serial.println(" Volviendo a intentar en 5 segundos");
+      /* --- Espera de 5 segundos bloqueante --- */
+      delay(5000);
+      /* --- Muestra el estatus de conexion --- */
+      Serial.println (client.connected ()); 
+    }
+    
+  }
+  
+}
